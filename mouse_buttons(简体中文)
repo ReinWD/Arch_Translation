@@ -102,7 +102,7 @@ Now, we need an entry in {{ic|xorg.conf}} that tells X how to use this mouse. It
 将{{Ic|Name}}选项用你刚刚复制的名字覆盖。如果你在使用多个鼠标或者在加载Xorg时出现错误，可以忽略掉{{ic|CorePointer}}选项。其他选项均为{{ic|evdev}}对鼠标的默认配置，因此应该可以对大多数鼠标生效。
 Replace the {{Ic|Name}} option with the name you copied from above. You may also omit the {{ic|CorePointer}} option if you use multiple mice or experience errors when attempting to load Xorg. The other options are all basic mouse configurations for evdev and should work with most mice.
 
-接下来，我们需要告诉X使用这个刚配置好的鼠标，因此，要在{{ic|xorg.conf}}中寻找{{Ic|ServerLayout}}。
+接下来，我们需要告诉 X Server 使用这个刚配置好的鼠标，因此，要在{{ic|xorg.conf}}中寻找{{Ic|ServerLayout}}。
 Next, we need to tell X to use the mouse, so look in {{ic|xorg.conf}} for {{Ic|ServerLayout}}.
 
 修改{{Ic|ServerLayout}}块来启用“Evdev Mouse”（刚刚设置好的设备的Identifier）。完成后，它应该像下面这样：
@@ -130,7 +130,7 @@ The only thing you should change in the layout is the {{ic|InputDevice}} line th
 That should be all that is required.
 
 * 由xxsashixx编辑：
-这是为Logitech G5鼠标用户写的。我没有为其他鼠标做测试。不过如果不做这一步，你的鼠标“可能”不能正常工作。
+这是为Logitech G5鼠标用户写的。我没有为其他鼠标做测试。不过如果不做这一步，你的鼠标''可能''不能正常工作。
 如果你不需要添加这些，就不要添加。
 * Edit by: xxsashixx 
 This is for Logitech G5 Mouse users. I have not tested this for other mice, but if you do not add this, your mouse ''MAY'' not work.
@@ -163,6 +163,11 @@ To find the appropriate id, do:
 
 * 由Diamir编辑：
 {{过时信息|udev规则不会生效，{{ic|1=SYSFS=}}和{{ic|1=BUS=}}键值已经被移除。[https://mailman.archlinux.org/pipermail/arch-dev-public/2011-October/021795.html]}}
+当你使用台式主机的键盘-鼠标组合时，这种设置不会生效。因为只有USB接入，在{{ic|/dev/input/by-id}}中只含有键盘。（译者注：此处翻译应该不准确。）
+因此，我们可以创建一个udev规则来得到一个一致的链接。
+下面的规则可以创建一个正确的指向{{ic|/dev/input/usbmouse}} 的链接：
+ KERNEL=="event[0-9]*", BUS=="usb", SYSFS{modalias}=="usb:v045Ep008Ad7373dc00dsc00dp00ic03isc00ip00", SYMLINK+="input/usbmouse"
+
 * Edit by: Diamir
 {{Out of date|The udev rule will not work, the {{ic|1=SYSFS=}} and {{ic|1=BUS=}} keys have been removed [https://mailman.archlinux.org/pipermail/arch-dev-public/2011-October/021795.html].}}
 With a Desktop type keyboard-mouse, this does not work because there is only one USB attachment and {{ic|/dev/input/by-id}} contains only the keyboard.
@@ -170,11 +175,39 @@ In this case, we can create a udev rule to get a consistent link.
 The following rules create the link {{ic|/dev/input/usbmouse}} which points on the correct event entry:
  KERNEL=="event[0-9]*", BUS=="usb", SYSFS{modalias}=="usb:v045Ep008Ad7373dc00dsc00dp00ic03isc00ip00", SYMLINK+="input/usbmouse"
 
+你可以将其命名为{{ic|z10_usb_mouse.rules}}并将其放在{{ic|/etc/udev/rules.d}}目录下
+{{ic|SYSFS(modalias)}}一项的值可以通过下面一条命令取得：
+ cat /proc/bus/input/devices
+
 You can call it {{ic|z10_usb_mouse.rules}} and put it in {{ic|/etc/udev/rules.d}}
 
 The cryptic value to use for {{ic|SYSFS(modalias)}} can be gotten in the following way:
 
 enter the command {{ic|cat /proc/bus/input/devices}}
+
+你可以在输出中找到你的键盘鼠标，在这一例子中，event4代表鼠标。
+ I: Bus=0003 Vendor=045e Product=008a Version=0111
+ N: Name="Microsoft Microsoft Wireless Optical Desktop� 1.00"
+ P: Phys=usb-0000:00:10.0-2/input0
+ S: Sysfs=/devices/pci0000:00/0000:00:10.0/usb1/1-2/1-2:1.0/input/input3
+ U: Uniq=
+ H: Handlers=kbd event0 
+ B: EV=120013
+ B: KEY=1000000000007 ff800000000007ff febeffdff3cfffff fffffffffffffffe
+ B: MSC=10
+ B: LED=107
+
+ I: Bus=0003 Vendor=045e Product=008a Version=0111
+ N: Name="Microsoft Microsoft Wireless Optical Desktop� 1.00"
+ P: Phys=usb-0000:00:10.0-2/input1
+ S: Sysfs=/devices/pci0000:00/0000:00:10.0/usb1/1-2/1-2:1.1/input/input4
+ U: Uniq=
+ H: Handlers=kbd mouse0 event1 
+ B: EV=17
+ B: KEY=3000000000000 0 1f0000 f8400244000 601878d800d448 1e000000000000 0
+ B: REL=7c3
+ B: MSC=10
+
 
 You will find the keyboard and the mouse and see event4 is the mouse in this case: 
 
@@ -200,47 +233,91 @@ You will find the keyboard and the mouse and see event4 is the mouse in this cas
  B: REL=7c3
  B: MSC=10
 
+因此，我使用下列命令（注意使用上一个命令的输出结果中的{{ic|event#}}替换event4）：
+{{bc|1=udevinfo -a -p $(udevinfo -q path -n /dev/input/event4) &#124; grep modalias
+ATTRS{modalias}=="input:b0003v045Ep008Ae0111-0,1,2,4,k71,72,73,74,83,86,8A,8C,8E,8F,9B,9C,9E,9F,A3,A4,A5,A6,AB,AC,B5,B6,CE,D2,D5,E2,E7,E8,E9,EA,EB,110,111,112,113,114,1B0,1B1,r0,1,6,7,8,9,A,am4,lsfw"
+ATTRS{modalias}=="usb:v045Ep008Ad7373dc00dsc00dp00ic03isc00ip00"
+ATTRS{modalias}=="pci:v00001106d00003038sv00001043sd000080EDbc0Csc03i00"}}
+
 So I enter the following command (adapt event # to your particular case):
 {{bc|1=udevinfo -a -p $(udevinfo -q path -n /dev/input/event4) &#124; grep modalias
 ATTRS{modalias}=="input:b0003v045Ep008Ae0111-0,1,2,4,k71,72,73,74,83,86,8A,8C,8E,8F,9B,9C,9E,9F,A3,A4,A5,A6,AB,AC,B5,B6,CE,D2,D5,E2,E7,E8,E9,EA,EB,110,111,112,113,114,1B0,1B1,r0,1,6,7,8,9,A,am4,lsfw"
 ATTRS{modalias}=="usb:v045Ep008Ad7373dc00dsc00dp00ic03isc00ip00"
 ATTRS{modalias}=="pci:v00001106d00003038sv00001043sd000080EDbc0Csc03i00"}}
 
+找到ATTR中代表usb设备的一项，填入"SYSFS{modalias}== "中
+
 grab the ATTRS which becomes with usb: to complete "SYSFS{modalias}== " entry
+
+最后，使用{{ic|usbmouse}}作为{{ic|xorg.conf}}中的设备选项。
+ Option "Device" "/dev/input/usbmouse"
 
 And finally, use {{ic|usbmouse}} as the Device Option in {{ic|xorg.conf}}:
  Option "Device" "/dev/input/usbmouse"
 
+== 配置完成后 ==
+
 == Post Configuration ==
 
 === Google Chrome ===
+=== Google Chrome ===
+
+有效。滚轮左右可以切换选项卡，侧键可以正常进行前进/后退操作
 
 It works. Horizontal scroll works out of the box - push the scroll wheel left or right. Thumb buttons also work as next/previous page.
 
 === Opera ===
+=== Opera ===
+
+有效。注意：可以在{{Ic|Preferences > Advanced > Shortcuts > Mouse set-up}}（选项-高级-快捷键-鼠标键位设置）中重设快捷动作，比如要把“鼠标按键 8”设置成“后退”
 
 It works. Note: buttons can be mapped to functions easily in {{Ic|Preferences > Advanced > Shortcuts > Mouse set-up}}. For example, to bind ''button 8'' to ''back'':
+
+#进入鼠标键位设置界面，打开“应用”选项卡
+#在“输入”一列，找到“鼠标按键 8”
+#在“动作”一列，设置其为“返回”
 
 # Navigate to mouse set-up and expand the ''Application'' drop-down
 # In the input column, type: ''Button 8''
 # In the actions column, type: ''Back''
 
 === Firefox ===
+=== Firefox ===
 
+==== 水平划动 ====
 ==== Horizontal scroll ====
+
+为了使侧键返回/前进的功能生效，而不是将页面向左/向右划动，需要在{{ic|about:config}}页面中设置以下选项：
+
+ mousewheel.default.action.override_x         2
+ mousewheel.default.delta_multiplier_x       -100
 
 To get back and forward enabled, instead of scroll left/right, change the following settings in {{ic|about:config}}:
 
  mousewheel.default.action.override_x         2
  mousewheel.default.delta_multiplier_x       -100
 
+=== 侧键前进/返回 ===
 === Thumb Buttons - forward and back ===
+
+{{Note | 是否要进行下列步骤取决于xdev有没有成功检测到所有的鼠标侧键（其功能可能在各个应用里各有不同）或你是否愿意改变侧键原有的功能}}
 
 {{Note | The following maybe redundant depending on whether xev detects all your mouse buttons correctly (functions can be mapped on a per-app basis) or you want to change the default behaviour.}}
 
+为了实现这个功能，我们需要将鼠标动作与想要进行的动作绑定，并且安装{{Pkg|xvkbd}}和{{Pkg|xbindkeys}}。
+
 To do this we need to map keystrokes to the desired mouse buttons and install {{Pkg|xvkbd}} and {{Pkg|xbindkeys}}.
 
+在大多数应用前进/返回的现代应用程序中，XF86Back 默认被指定为进行返回动作， XF86Forward 默认被指定为前进动作。在大多数 MX 鼠标中这两个键位会被解析为鼠标按键 8 和鼠标按键 9。如果你的鼠标不一样，你需要使用xev检查你的鼠标按键编号并且用其替换本例中的鼠标按键 8 和鼠标按键 9。
+
 In most modern applications which use back/forward features, XF86Back is mapped to back and XF86Forward is mapped to forward by default. On most MX mice the thumb buttons resolve to 8 & 9. If your mouse is different, check button numbers using xev and replace the numbers used in the example (b:8 & b:9).
+
+因此，如果你正在使用MX鼠标，你需要新建 {{ic|~/xbindkeysrc}} ，在其中写入：
+ # Mouse Buttons
+ "xvkbd -xsendevent -text "\[XF86Back]""
+ m:0x0 + b:8 
+ "xvkbd -xsendevent -text "\[XF86Forward]""
+ m:0x0 + b:9
 
 So if you have an MX mouse you would create the file ~/.xbindkeysrc, containing:
 
@@ -250,31 +327,57 @@ So if you have an MX mouse you would create the file ~/.xbindkeysrc, containing:
  "xvkbd -xsendevent -text "\[XF86Forward]""
  m:0x0 + b:9
 
+下面测试一下。运行下列命令，如果它生效，记得将下面这条命令加入{{ic|.xinitrc}}，或者其他在X Server启动时调用的脚本中。经过这样设置，在Epiphany与Konqueror也应该自动生效，而不需要额外的设置或者使用[[Imwheel]]。
+ xbindkeys
+
 Now to test... Run the following command and if it works as expected remember to add xbindkeys to {{ic|.xinitrc}} or somewhere where it will be executed each time X starts. Also, this should work with Epiphany and Konqueror without any additional configuration or use of  [[Imwheel]].
  xbindkeys
 
+上述情况可在 [[MX1000 Buttons]] wiki页面中寻找更多信息。
+
 The above info and more help may be found in the [[MX1000 Buttons]] wiki.
 
+=== 利用xmodmap ===
 === xmodmap tweaking ===
 
+{{Style|要说''怎么做''，而非''为什么''。}}
 {{Style|Says ''how'', but not ''why''.}}
 
+{{Note | 如果你在使用edev，请无视以下步骤，下面的步骤是为非udev用户提供的方法。}}
+{{Note | 如果你在使用edev，请无视以下步骤，下面的步骤是为非udev用户提供的方法。（重要的事情说两遍。）}}
 {{Note | None of the below is necessary with evdev, but it's here for non-evdev users. Unless something does not work on your mouse, ignore this whole section!}}
+
+如果你使用 .xinitrc 来加载 X Server，将下面一条命令加入{{ic|.xinitrc}}（记得将数字改成你鼠标包含的按键）。
+  xmodmap -e "pointer = 1 2 3 6 7 8 9 10 11 12 4 5" &
 
 If you use .xinitrc to load X, then add this to {{ic|.xinitrc}} (change for the number of buttons you have):
   xmodmap -e "pointer = 1 2 3 6 7 8 9 10 11 12 4 5" &
 
+
+{{Note | 4 和 5 '''必须放在最后面'''，否则你的滑轮上下划动可能无法使用}}
 Note that buttons 4 and 5 '''must go on the end''' or else your scroll wheel will not work.
+
+如果你使用 GDM/XDM/KDM 而不是 .xinitrc, 使用{{ic|~/.Xmodmap}}文件，请将下面一条命令加入其中：
+  pointer = 1 2 3 6 7 8 9 10 11 12 4 5
 
 If you use GDM/XDM/KDM instead of .xinitrc, then create the file {{ic|~/.Xmodmap}} and add this to it (change for the number of buttons you have):
   pointer = 1 2 3 6 7 8 9 10 11 12 4 5
 
+* 如果{{ic|~/.Xmodmap}}存在，GDM/XDM/KDM 将读取它。而{{ic|startx}}不会读取它。另一种解决方案是将{{Ic|xmodmap ~/.Xmodmap}}加入{{Ic|.xinitrc}}。这样，你可以同时使用 GDM/XDM/KDM 和 {{Ic|startx}}，而作出改动时只需要修改 {{ic|~/.Xmodmap}}一个文件。
+
 * GDM/XDM/KDM read the {{ic|~/.Xmodmap}} file if it's present, whereas {{Ic|startx}} does not. Another solution would be to add this to your ~/.xinitrc: {{Ic|xmodmap ~/.Xmodmap}}. This would allow you to use *DM and {{Ic|startx}} while only having to edit {{ic|~/.Xmodmap}} when you need to make changes.
+
+你可能需要改变这些数字的顺序来达到你想要的效果。有一些鼠标的6号与7号键被分配给滚轮，而滚轮本应使用最后两个数字。请多次尝试改变顺序直到它正确工作。
 
 You may have to play with these numbers a bit to get your desired behavior. Some mice use buttons 6 and 7 for the scroll wheel, in which case those buttons would have to be the last numbers. Keep playing with it until it works!
 
+你也可以使用'xev'来确定各个键的作用（'xev'是XOrg的一部分）。当xev运行时，它会在你的屏幕上显示一个小框，你可以把光标放进去并点击鼠标按键来确定它们是否正常工作。
+
+*译者注：xev会在控制台产生大量的输出，请确保前序命令中没有重要信息，或者新建一个终端界面。
+
 You can also check to see which buttons are being read with a program called 'xev', which is part of XOrg. When xev is run, it will show a box on your desktop that you can put the cursor into and click buttons to find out what buttons have been mapped.
 
+=== 利用xinput ===
 === xinput tweaking ===
 
 For debugging purposes {{ic|xinput}} can be used as it is able to change the button map on the fly in userspace. The following line corrects the button mapping (there have been reported cases with Logitech M505/B605 mice and possibly others) so the received events are mapped correctly:
